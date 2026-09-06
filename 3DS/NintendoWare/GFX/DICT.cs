@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -126,6 +126,14 @@ namespace _3DS.NintendoWare.GFX
 		{
 			get { return Entries[IndexOf(index)]; }
 			set { Entries[IndexOf(index)] = value; RegenerateTree(); }
+		}
+
+		public void Rename(int Index, String Name)
+		{
+			if (Index < 0 || Index >= Entries.Count) throw new ArgumentOutOfRangeException("Index");
+			if (Name == null) throw new ArgumentNullException("Name");
+			Entries[Index].Name = Name;
+			RegenerateTree();
 		}
 
 		public void Add(String Name)
