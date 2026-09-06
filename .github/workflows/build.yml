@@ -33,16 +33,37 @@ jobs:
           Copy-Item 'Libraries\Tao.OpenGl.dll' (Join-Path $taoDir 'Tao.OpenGl.dll') -Force
           Copy-Item 'Libraries\Tao.Platform.Windows.dll' (Join-Path $taoDir 'Tao.Platform.Windows.dll') -Force
 
-      - name: Prepare legacy output directories
+      - name: Prepare CI solution
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
+          $source = 'EveryFileExplorer.sln'
+          $dest = 'EveryFileExplorer.CI.sln'
+          $ctgpGuid = '{FBF1CF8A-C8BF-4C27-A6E4-EA360BBDCC89}'
+          $lines = Get-Content $source
+          $result = New-Object System.Collections.Generic.List[string]
+          $skipProject = $false
+
+          foreach ($line in $lines) {
+            if (-not $skipProject -and $line -match '^Project\(' -and $line -match '= "CTGP-7",') {
+              $skipProject = $true
+              continue
+            }
+            if ($skipProject) {
+              if ($line -eq 'EndProject') { $skipProject = $false }
+              continue
+            }
+            if ($line.Contains($ctgpGuid)) { continue }
+            $result.Add($line)
+          }
+
+          [System.IO.File]::WriteAllLines((Join-Path $env:GITHUB_WORKSPACE $dest), $result, [System.Text.Encoding]::UTF8)
           New-Item -ItemType Directory -Force -Path 'EveryFileExplorer\bin\Debug\Plugins' | Out-Null
 
-      - name: Build application
-        run: msbuild EveryFileExplorer\EveryFileExplorer.csproj /m /p:Configuration=Release /p:Platform=x86 /p:SolutionDir="${{ github.workspace }}\" /verbosity:minimal
-
-      - name: Build 3DS plugin
-        run: msbuild 3DS\3DS.csproj /m /p:Configuration=Release /p:Platform=AnyCPU /p:SolutionDir="${{ github.workspace }}\" /verbosity:minimal
+      - name: Build application and 3DS plugin
+        shell: powershell
+        run: |
+          msbuild EveryFileExplorer.CI.sln /m "/t:EveryFileExplorer;3DS" /p:Configuration=Release "/p:Platform=Any CPU" /verbosity:minimal
 
       - name: Collect build output
         shell: powershell
