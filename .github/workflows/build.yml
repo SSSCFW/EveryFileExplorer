@@ -28,7 +28,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $taoDir = Join-Path $env:ProgramFilesX86 'TaoFramework\bin'
+          $taoDir = 'C:\Program Files (x86)\TaoFramework\bin'
           New-Item -ItemType Directory -Force -Path $taoDir | Out-Null
 
           $pkgDir = Join-Path $env:RUNNER_TEMP 'tao'
@@ -45,22 +45,37 @@ jobs:
           Copy-Item $openGl.FullName (Join-Path $taoDir 'Tao.OpenGl.dll') -Force
           Copy-Item $platform.FullName (Join-Path $taoDir 'Tao.Platform.Windows.dll') -Force
 
-      - name: Build Release
-        run: msbuild EveryFileExplorer.sln /m /p:Configuration=Release /p:Platform="Any CPU" /verbosity:minimal
+      - name: Prepare legacy output directories
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path 'EveryFileExplorer\bin\Debug\Plugins' | Out-Null
+
+      - name: Build application
+        run: msbuild EveryFileExplorer\EveryFileExplorer.csproj /m /p:Configuration=Release /p:Platform=x86 /p:SolutionDir="${{ github.workspace }}\" /verbosity:minimal
+
+      - name: Build 3DS plugin
+        run: msbuild 3DS\3DS.csproj /m /p:Configuration=Release /p:Platform=AnyCPU /p:SolutionDir="${{ github.workspace }}\" /verbosity:minimal
 
       - name: Collect build output
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $out = Join-Path $env:GITHUB_WORKSPACE 'artifact\EveryFileExplorer'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $plugins = Join-Path $out 'Plugins'
+          New-Item -ItemType Directory -Force -Path $plugins | Out-Null
 
-          $exe = Get-ChildItem $env:GITHUB_WORKSPACE -Recurse -Filter EveryFileExplorer.exe |
-            Where-Object { $_.FullName -match '\\bin\\Release\\' } |
-            Select-Object -First 1
-          if (-not $exe) { throw 'EveryFileExplorer.exe was not found in a Release output directory.' }
+          $appOut = Join-Path $env:GITHUB_WORKSPACE 'EveryFileExplorer\bin\Release'
+          $pluginOut = Join-Path $env:GITHUB_WORKSPACE '3DS\bin\Release'
 
-          Copy-Item (Join-Path $exe.Directory.FullName '*') $out -Recurse -Force
+          if (-not (Test-Path (Join-Path $appOut 'EveryFileExplorer.exe'))) {
+            throw 'EveryFileExplorer.exe was not produced.'
+          }
+          if (-not (Test-Path (Join-Path $pluginOut '3DS.dll'))) {
+            throw '3DS.dll was not produced.'
+          }
+
+          Copy-Item (Join-Path $appOut '*') $out -Recurse -Force
+          Copy-Item (Join-Path $pluginOut '*') $plugins -Recurse -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
