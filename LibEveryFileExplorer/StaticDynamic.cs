@@ -12,27 +12,20 @@ namespace LibEveryFileExplorer
 		private Type _type;
 		public StaticDynamic(Type type) { _type = type; }
 
-		// Handle static properties and fields
+		// Handle static properties
 		public override bool TryGetMember(GetMemberBinder binder, out object result)
 		{
 			try
             {
 				PropertyInfo prop = _type.GetProperty(binder.Name, BindingFlags.FlattenHierarchy | BindingFlags.Static | BindingFlags.Public);
-				if (prop != null)
+				if (prop == null)
 				{
-					result = prop.GetValue(null, null);
-					return true;
+					result = null;
+					return false;
 				}
 
-				FieldInfo field = _type.GetField(binder.Name, BindingFlags.FlattenHierarchy | BindingFlags.Static | BindingFlags.Public);
-				if (field != null)
-				{
-					result = field.GetValue(null);
-					return true;
-				}
-
-				result = null;
-				return false;
+				result = prop.GetValue(null, null);
+				return true;
 			} catch (Exception e)
             {
 				result = null;
