@@ -37,6 +37,12 @@ jobs:
       - name: Build LibEveryFileExplorer
         run: msbuild LibEveryFileExplorer\LibEveryFileExplorer.csproj /m /p:Configuration=Release /p:Platform=AnyCPU /verbosity:minimal
 
+      - name: Stage library for x86 project reference
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path 'LibEveryFileExplorer\bin\x86\Release' | Out-Null
+          Copy-Item 'LibEveryFileExplorer\bin\Release\*' 'LibEveryFileExplorer\bin\x86\Release\' -Recurse -Force
+
       - name: Build CommonFiles
         run: msbuild CommonFiles\CommonFiles.csproj /m /p:Configuration=Release /p:Platform=AnyCPU /p:BuildProjectReferences=false /p:SolutionDir="${{ github.workspace }}\" /verbosity:minimal
 
