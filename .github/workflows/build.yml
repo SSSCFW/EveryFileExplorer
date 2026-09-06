@@ -60,10 +60,8 @@ jobs:
           [System.IO.File]::WriteAllLines((Join-Path $env:GITHUB_WORKSPACE $dest), $result, [System.Text.Encoding]::UTF8)
           New-Item -ItemType Directory -Force -Path 'EveryFileExplorer\bin\Debug\Plugins' | Out-Null
 
-      - name: Build application and 3DS plugin
-        shell: powershell
-        run: |
-          msbuild EveryFileExplorer.CI.sln /m "/t:EveryFileExplorer;3DS" /p:Configuration=Release "/p:Platform=Any CPU" /verbosity:minimal
+      - name: Build Release
+        run: msbuild EveryFileExplorer.CI.sln /m /p:Configuration=Release /p:Platform="Any CPU" /verbosity:minimal
 
       - name: Collect build output
         shell: powershell
