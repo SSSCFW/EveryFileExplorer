@@ -61,17 +61,71 @@ jobs:
           New-Item -ItemType Directory -Force -Path $plugins | Out-Null
 
           $appOut = Join-Path $env:GITHUB_WORKSPACE 'EveryFileExplorer\bin\Release'
+          $commonOut = Join-Path $env:GITHUB_WORKSPACE 'CommonFiles\bin\Release'
           $pluginOut = Join-Path $env:GITHUB_WORKSPACE '3DS\bin\Release'
 
           if (-not (Test-Path (Join-Path $appOut 'EveryFileExplorer.exe'))) {
             throw 'EveryFileExplorer.exe was not produced.'
           }
+          if (-not (Test-Path (Join-Path $commonOut 'CommonFiles.dll'))) {
+            throw 'CommonFiles.dll was not produced.'
+          }
           if (-not (Test-Path (Join-Path $pluginOut '3DS.dll'))) {
             throw '3DS.dll was not produced.'
           }
 
+          # Copy the application output, including the legacy Libraries that the
+          # application pre-build step places in bin\Release\Plugins.
           Copy-Item (Join-Path $appOut '*') $out -Recurse -Force
-          Copy-Item (Join-Path $pluginOut '*') $plugins -Recurse -Force
+
+          # Only actual plugin assemblies belong in Plugins. Copying the whole
+          # 3DS build directory also copied LibEveryFileExplorer.dll there;
+          # PluginManager then mistook the framework assembly for a plugin and
+          # failed while resolving FileFormat<T>.Identifier at runtime.
+          Copy-Item (Join-Path $commonOut 'CommonFiles.dll') $plugins -Force
+          if (Test-Path (Join-Path $commonOut 'CommonFiles.pdb')) {
+            Copy-Item (Join-Path $commonOut 'CommonFiles.pdb') $plugins -Force
+          }
+          Copy-Item (Join-Path $pluginOut '3DS.dll') $plugins -Force
+          if (Test-Path (Join-Path $pluginOut '3DS.pdb')) {
+            Copy-Item (Join-Path $pluginOut '3DS.pdb') $plugins -Force
+          }
+
+          # 3DS.dll references Windows API Code Pack assemblies. Keep those
+          # alongside the plugin, but do not copy LibEveryFileExplorer.dll.
+          Get-ChildItem $pluginOut -Filter 'Microsoft.WindowsAPICodePack*.dll' |
+            ForEach-Object { Copy-Item $_.FullName $plugins -Force }
+          Get-ChildItem $pluginOut -Filter 'Microsoft.WindowsAPICodePack*.xml' |
+            ForEach-Object { Copy-Item $_.FullName $plugins -Force }
+
+          $badFrameworkCopy = Join-Path $plugins 'LibEveryFileExplorer.dll'
+          if (Test-Path $badFrameworkCopy) {
+            Remove-Item $badFrameworkCopy -Force
+          }
+          $badFrameworkPdb = Join-Path $plugins 'LibEveryFileExplorer.pdb'
+          if (Test-Path $badFrameworkPdb) {
+            Remove-Item $badFrameworkPdb -Force
+          }
+
+      - name: Validate artifact layout
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifact\EveryFileExplorer'
+          $plugins = Join-Path $out 'Plugins'
+
+          if (-not (Test-Path (Join-Path $out 'LibEveryFileExplorer.dll'))) {
+            throw 'Root LibEveryFileExplorer.dll is missing.'
+          }
+          if (Test-Path (Join-Path $plugins 'LibEveryFileExplorer.dll')) {
+            throw 'LibEveryFileExplorer.dll must not be packaged inside Plugins.'
+          }
+          if (-not (Test-Path (Join-Path $plugins '3DS.dll'))) {
+            throw '3DS.dll is missing from Plugins.'
+          }
+          if (-not (Test-Path (Join-Path $plugins 'CommonFiles.dll'))) {
+            throw 'CommonFiles.dll is missing from Plugins.'
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
