@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -20,6 +20,8 @@ namespace _3DS.UI
 	{
 		ImageList ImageL;
 		CMDLViewer ModViewer = null;
+		ContextMenuStrip textureContextMenu;
+		ToolStripMenuItem renameTextureMenuItem;
 
 		CGFX mod;
 
@@ -44,6 +46,164 @@ namespace _3DS.UI
 			ImageL.Images.Add(Resource.lighthouse_shine);
 			ImageL.Images.Add(Resource.light_bulb);
 			treeView1.ImageList = ImageL;
+
+			InitializeTextureRename();
+		}
+
+		private void InitializeTextureRename()
+		{
+			treeView1.LabelEdit = true;
+			treeView1.BeforeLabelEdit += treeView1_BeforeLabelEdit;
+			treeView1.AfterLabelEdit += treeView1_AfterLabelEdit;
+			treeView1.KeyDown += treeView1_KeyDown;
+			treeView1.NodeMouseClick += treeView1_NodeMouseClick;
+
+			textureContextMenu = new ContextMenuStrip(components);
+			renameTextureMenuItem = new ToolStripMenuItem("Rename");
+			renameTextureMenuItem.ShortcutKeys = Keys.F2;
+			renameTextureMenuItem.Click += renameTextureMenuItem_Click;
+			textureContextMenu.Items.Add(renameTextureMenuItem);
+		}
+
+		private bool IsRenamableTextureNode(TreeNode node)
+		{
+			return node != null &&
+				node.Parent != null &&
+				node.Parent.Text == "Textures" &&
+				node.Tag is TXOB;
+		}
+
+		private void BeginRenameSelectedTexture()
+		{
+			TreeNode node = treeView1.SelectedNode;
+			if (!IsRenamableTextureNode(node)) return;
+			node.BeginEdit();
+		}
+
+		private void renameTextureMenuItem_Click(object sender, EventArgs e)
+		{
+			BeginRenameSelectedTexture();
+		}
+
+		private void treeView1_KeyDown(object sender, KeyEventArgs e)
+		{
+			if (e.KeyCode == Keys.F2 && e.Modifiers == Keys.None)
+			{
+				BeginRenameSelectedTexture();
+				e.Handled = true;
+				e.SuppressKeyPress = true;
+			}
+		}
+
+		private void treeView1_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
+		{
+			if (e.Button != MouseButtons.Right) return;
+
+			treeView1.SelectedNode = e.Node;
+			if (IsRenamableTextureNode(e.Node))
+			{
+				textureContextMenu.Show(treeView1, e.Location);
+			}
+		}
+
+		private void treeView1_BeforeLabelEdit(object sender, NodeLabelEditEventArgs e)
+		{
+			if (!IsRenamableTextureNode(e.Node)) e.CancelEdit = true;
+		}
+
+		private void treeView1_AfterLabelEdit(object sender, NodeLabelEditEventArgs e)
+		{
+			if (e.Label == null) return;
+
+			String error;
+			if (!TryRenameTexture(e.Node, e.Label, out error))
+			{
+				e.CancelEdit = true;
+				MessageBox.Show(this, error, "Rename Texture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			}
+		}
+
+		private bool TryRenameTexture(TreeNode node, String newName, out String error)
+		{
+			error = null;
+			if (!IsRenamableTextureNode(node))
+			{
+				error = "Only texture entries can be renamed.";
+				return false;
+			}
+
+			if (String.IsNullOrEmpty(newName))
+			{
+				error = "Texture names cannot be empty.";
+				return false;
+			}
+
+			for (int i = 0; i < newName.Length; i++)
+			{
+				if (newName[i] < 0x20 || newName[i] > 0x7E)
+				{
+					error = "Texture names must contain printable ASCII characters only.";
+					return false;
+				}
+			}
+
+			TXOB texture = (TXOB)node.Tag;
+			if (String.Equals(texture.Name, newName, StringComparison.Ordinal)) return true;
+
+			int textureIndex = Array.IndexOf(mod.Data.Textures, texture);
+			if (textureIndex < 0)
+			{
+				error = "The selected texture could not be found in the CGFX texture table.";
+				return false;
+			}
+
+			if (mod.Data.Dictionaries == null || mod.Data.Dictionaries.Length <= 1 || mod.Data.Dictionaries[1] == null || textureIndex >= mod.Data.Dictionaries[1].Count)
+			{
+				error = "The selected texture does not have a matching CGFX dictionary entry.";
+				return false;
+			}
+
+			for (int i = 0; i < mod.Data.Textures.Length; i++)
+			{
+				if (i != textureIndex && String.Equals(mod.Data.Textures[i].Name, newName, StringComparison.Ordinal))
+				{
+					error = "A texture named \"" + newName + "\" already exists.";
+					return false;
+				}
+			}
+
+			DICT textureDictionary = mod.Data.Dictionaries[1];
+			for (int i = 0; i < textureDictionary.Count; i++)
+			{
+				if (i != textureIndex && String.Equals(textureDictionary[i].Name, newName, StringComparison.Ordinal))
+				{
+					error = "A texture named \"" + newName + "\" already exists in the CGFX dictionary.";
+					return false;
+				}
+			}
+
+			String oldTextureName = texture.Name;
+			String oldDictionaryName = textureDictionary[textureIndex].Name;
+			texture.Name = newName;
+			try
+			{
+				textureDictionary.Rename(textureIndex, newName);
+			}
+			catch (Exception ex)
+			{
+				texture.Name = oldTextureName;
+				try
+				{
+					textureDictionary.Rename(textureIndex, oldDictionaryName);
+				}
+				catch
+				{
+				}
+				error = "Failed to rebuild the CGFX texture dictionary: " + ex.Message;
+				return false;
+			}
+
+			return true;
 		}
 
 
