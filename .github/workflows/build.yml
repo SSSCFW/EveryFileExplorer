@@ -1,0 +1,70 @@
+name: Build Every File Explorer
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore EveryFileExplorer.sln -NonInteractive
+
+      - name: Install Tao Framework
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $taoDir = Join-Path $env:ProgramFilesX86 'TaoFramework\bin'
+          New-Item -ItemType Directory -Force -Path $taoDir | Out-Null
+
+          $pkgDir = Join-Path $env:RUNNER_TEMP 'tao'
+          New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
+
+          nuget install Tao.OpenGl -Version 2.1.0 -OutputDirectory $pkgDir -NonInteractive
+          nuget install Tao.Platform.Windows -Version 1.0.0 -OutputDirectory $pkgDir -NonInteractive
+
+          $openGl = Get-ChildItem $pkgDir -Recurse -Filter Tao.OpenGl.dll | Select-Object -First 1
+          $platform = Get-ChildItem $pkgDir -Recurse -Filter Tao.Platform.Windows.dll | Select-Object -First 1
+          if (-not $openGl) { throw 'Tao.OpenGl.dll was not found after NuGet install.' }
+          if (-not $platform) { throw 'Tao.Platform.Windows.dll was not found after NuGet install.' }
+
+          Copy-Item $openGl.FullName (Join-Path $taoDir 'Tao.OpenGl.dll') -Force
+          Copy-Item $platform.FullName (Join-Path $taoDir 'Tao.Platform.Windows.dll') -Force
+
+      - name: Build Release
+        run: msbuild EveryFileExplorer.sln /m /p:Configuration=Release /p:Platform="Any CPU" /verbosity:minimal
+
+      - name: Collect build output
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifact\EveryFileExplorer'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          $exe = Get-ChildItem $env:GITHUB_WORKSPACE -Recurse -Filter EveryFileExplorer.exe |
+            Where-Object { $_.FullName -match '\\bin\\Release\\' } |
+            Select-Object -First 1
+          if (-not $exe) { throw 'EveryFileExplorer.exe was not found in a Release output directory.' }
+
+          Copy-Item (Join-Path $exe.Directory.FullName '*') $out -Recurse -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EveryFileExplorer-Windows
+          path: artifact/EveryFileExplorer
+          if-no-files-found: error
