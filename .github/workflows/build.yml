@@ -24,26 +24,14 @@ jobs:
       - name: Restore NuGet packages
         run: nuget restore EveryFileExplorer.sln -NonInteractive
 
-      - name: Install Tao Framework
+      - name: Prepare Tao Framework
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $taoDir = 'C:\Program Files (x86)\TaoFramework\bin'
           New-Item -ItemType Directory -Force -Path $taoDir | Out-Null
-
-          $pkgDir = Join-Path $env:RUNNER_TEMP 'tao'
-          New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
-
-          nuget install Tao.OpenGl -Version 2.1.0 -OutputDirectory $pkgDir -NonInteractive
-          nuget install Tao.Platform.Windows -Version 1.0.0 -OutputDirectory $pkgDir -NonInteractive
-
-          $openGl = Get-ChildItem $pkgDir -Recurse -Filter Tao.OpenGl.dll | Select-Object -First 1
-          $platform = Get-ChildItem $pkgDir -Recurse -Filter Tao.Platform.Windows.dll | Select-Object -First 1
-          if (-not $openGl) { throw 'Tao.OpenGl.dll was not found after NuGet install.' }
-          if (-not $platform) { throw 'Tao.Platform.Windows.dll was not found after NuGet install.' }
-
-          Copy-Item $openGl.FullName (Join-Path $taoDir 'Tao.OpenGl.dll') -Force
-          Copy-Item $platform.FullName (Join-Path $taoDir 'Tao.Platform.Windows.dll') -Force
+          Copy-Item 'Libraries\Tao.OpenGl.dll' (Join-Path $taoDir 'Tao.OpenGl.dll') -Force
+          Copy-Item 'Libraries\Tao.Platform.Windows.dll' (Join-Path $taoDir 'Tao.Platform.Windows.dll') -Force
 
       - name: Prepare legacy output directories
         shell: powershell
