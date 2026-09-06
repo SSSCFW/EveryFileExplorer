@@ -38,7 +38,7 @@ jobs:
         run: msbuild LibEveryFileExplorer\LibEveryFileExplorer.csproj /m /p:Configuration=Release /p:Platform=AnyCPU /verbosity:minimal
 
       - name: Build CommonFiles
-        run: msbuild CommonFiles\CommonFiles.csproj /m /p:Configuration=Release /p:Platform=AnyCPU /p:BuildProjectReferences=false /verbosity:minimal
+        run: msbuild CommonFiles\CommonFiles.csproj /m /p:Configuration=Release /p:Platform=AnyCPU /p:BuildProjectReferences=false /p:SolutionDir="${{ github.workspace }}\" /verbosity:minimal
 
       - name: Build application
         run: msbuild EveryFileExplorer\EveryFileExplorer.csproj /m /p:Configuration=Release /p:Platform=x86 /p:BuildProjectReferences=false /p:SolutionDir="${{ github.workspace }}\" /verbosity:minimal
